@@ -1,20 +1,15 @@
-import sqlite3
 from typing import Type
+from sqlalchemy.exc import IntegrityError
 from db import DefaultDBTable
 from fastapi.responses import JSONResponse
-
-from db_dataclasses import DeleteModel, DefaultUpdate
-
-
-def get_all_res(obj: Type[DefaultDBTable]):
-    return JSONResponse(content={'status': 200, 'result': obj.get_all()})
+from db_dataclasses import DeleteModel
 
 
 def create_model(obj: Type[DefaultDBTable], **kwargs):
     try:
         d = obj.create(**kwargs)
         return JSONResponse(content={'status': 200, 'result': d})
-    except sqlite3.IntegrityError:
+    except IntegrityError:
         return JSONResponse(content={'status': 400, 'error': 'Value in database'}, status_code=400)
 
 

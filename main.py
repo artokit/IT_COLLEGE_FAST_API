@@ -118,4 +118,5 @@ def get_client_orders(client_id: int):
 @app.get('/get_client_cars', response_model=ClientCars)
 def get_client_cars(client_id: int):
     cars_id = [OrderModel(**i).car_pk for i in Order.get_by_client_pk(client_id)]
+    print(cars_id)
     return ClientCars(200, [CarModel(**i) for i in Car.get_cars(cars_id)])

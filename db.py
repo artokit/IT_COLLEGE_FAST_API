@@ -1,72 +1,94 @@
-import sqlite3
-connect = sqlite3.connect('db.sqlite', check_same_thread=False)
-cursor = connect.cursor()
+from sqlalchemy import create_engine, Table, Column, Integer, ForeignKey, Text
+from sqlalchemy.orm import declarative_base, Session
+
+engine = create_engine(
+    "postgresql+psycopg2://admin:admin@localhost:5431/production"
+)
+connect = engine.connect()
+Base = declarative_base()
+session = Session(engine)
+
+cars = Table(
+    'cars',
+    Base.metadata,
+    Column("pk", Integer, primary_key=True, autoincrement=True),
+    Column("brand", Text, nullable=False),
+    Column("model", Text, nullable=False),
+    Column("year_of_issue", Integer, nullable=False),
+    Column("vin_code", Text, nullable=False, unique=True)
+)
+
+clients = Table(
+    'clients',
+    Base.metadata,
+    Column('pk', Integer, primary_key=True, nullable=False, autoincrement=True),
+    Column('first_name', Text, nullable=False),
+    Column('last_name', Text, nullable=False),
+    Column('address', Text, nullable=False, unique=True),
+    Column('number', Text, nullable=False, unique=True)
+)
+
+orders = Table(
+    'orders',
+    Base.metadata,
+    Column('pk', Integer, nullable=False, unique=True, autoincrement=True),
+    Column('car_pk', Integer, ForeignKey('cars.pk'), nullable=False, unique=True),
+    Column('client_pk', Integer, ForeignKey('clients.pk'), nullable=False),
+    Column('date', Text, nullable=False),
+    Column('description', Text),
+    Column('status', Text, nullable=False)
+)
+# Base.metadata.create_all(engine)
 
 
 class DefaultDBTable:
-    table_name = None
-    fields = ('pk', 'brand', 'model', 'year_of_issue', 'vin_code')
-
-    @classmethod
-    def get_all(cls):
-        res = cursor.execute(f'SELECT {",".join(cls.fields)} FROM {cls.table_name}').fetchall()
-        return [dict(zip(cls.fields, i)) for i in res]
+    table = None
+    fields = None
 
     @classmethod
     def create(cls, **kwargs):
-        keys = ", ".join(kwargs.keys())
-        values_questions = "?,".join([""]*len(kwargs.values())) + '?'
-        cursor.execute(f'INSERT INTO {cls.table_name} ({keys}) VALUES ({values_questions})', tuple(kwargs.values()))
-        connect.commit()
-        kwargs['pk']: cursor.lastrowid
+        session.execute(cls.table.insert().values(**kwargs))
+        session.commit()
+        kwargs['pk'] = session.query(cls.table).order_by(cls.table.c.pk).first()[0]
         return kwargs
 
     @classmethod
     def get_by_pk(cls, pk):
-        res = cursor.execute(f'SELECT * FROM {cls.table_name} WHERE pk = ?', (pk, ))
-        return res.fetchone()
+        res = cls.table.select().where(cls.table.c.pk == pk)
+        return session.execute(res).fetchone()
 
     @classmethod
     def delete_by_pk(cls, pk):
-        cursor.execute(f'DELETE FROM {cls.table_name} where pk = ?', (pk, ))
-        connect.commit()
+        session.execute(cls.table.delete().where(cls.table.c.pk == pk))
+        session.commit()
         return pk
 
     @classmethod
     def update_by_pk(cls, pk, **kwargs):
-        set_text = ', '.join([f'''{i} = {kwargs[i] if isinstance(kwargs[i], int) else f"'{kwargs[i]}'"}'''
-                              for i in kwargs if kwargs[i]])
-        print(f'UPDATE {cls.table_name} SET {set_text} where pk = {pk}')
-        cursor.execute(f'UPDATE {cls.table_name} SET {set_text} where pk = ?', (pk, ))
-        connect.commit()
+        kwargs = {i: kwargs[i] for i in kwargs if kwargs[i] is not None}
+        session.execute(cls.table.update().values(**kwargs).where(cls.table.c.pk == pk))
+        session.commit()
 
 
 class Car(DefaultDBTable):
-    table_name = 'cars'
+    table = cars
     fields = ('pk', 'brand', 'model', 'year_of_issue', 'vin_code')
 
     @classmethod
     def get_cars(cls, ids: list[int]):
-        print(f'SELECT * FROM {cls.table_name} WHERE `pk` in ({",".join(map(str, ids))}')
-        res = cursor.execute(
-            f'SELECT * FROM {cls.table_name} WHERE `pk` in (?)', (','.join(map(str, ids)),)
-        ).fetchall()
+        res = session.execute(cls.table.select().where(cars.c.pk.in_(tuple(ids)))).fetchall()
         return [dict(zip(cls.fields, i)) for i in res]
 
 
 class Order(DefaultDBTable):
-    table_name = 'orders'
+    table = orders
     fields = ('pk', 'car_pk', 'client_pk', 'date', 'description', 'status')
 
     @classmethod
     def get_by_client_pk(cls, pk):
-        res = cursor.execute('SELECT * FROM ORDERS WHERE client_pk = ?', (pk, )).fetchall()
+        res = session.execute(cls.table.select().where(cls.table.c.client_pk == pk)).fetchall()
         return [dict(zip(cls.fields, i)) for i in res]
 
 
 class Client(DefaultDBTable):
-    table_name = 'clients'
-
-    @classmethod
-    def get_all(cls):
-        return
+    table = clients
