@@ -1,7 +1,7 @@
 from typing import Type
 from sqlalchemy.exc import IntegrityError
-from db import DefaultDBTable
 from fastapi.responses import JSONResponse
+from database.business_logic import DefaultDBTable
 from db_dataclasses import DeleteModel
 
 
